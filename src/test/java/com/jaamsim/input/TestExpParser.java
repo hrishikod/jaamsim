@@ -72,8 +72,8 @@ public class TestExpParser {
 	}
 
 	private static class PC extends ExpParser.ParseContext {
-		public PC() {
-			super(new HashMap<String, ExpResult>());
+		public PC(ArrayList<String> dynVars) {
+			super(new HashMap<String, ExpResult>(), dynVars);
 		}
 
 		@Override
@@ -132,7 +132,7 @@ public class TestExpParser {
 
 	class UnitPC extends ExpParser.ParseContext {
 		public UnitPC() {
-			super(new HashMap<String, ExpResult>());
+			super(new HashMap<String, ExpResult>(), null);
 		}
 
 		@Override
@@ -233,13 +233,15 @@ public class TestExpParser {
 
 	}
 
-	static PC pc = new PC();
+	static PC pc = new PC(null);
 
 	private static class EC extends ExpParser.EvalContext {
-
+		public EC(ArrayList<ExpResult> dynamicVals) {
+			super(dynamicVals);
+		}
 
 	}
-	static EC ec = new EC();
+	static EC ec = new EC(null);
 
 	private static void testToken(ExpTokenizer.Token tok, int type, String val) {
 		assertTrue(tok.type == type);
@@ -552,6 +554,9 @@ public class TestExpParser {
 }
 
 	private static class VariableTestPC extends PC {
+		public VariableTestPC() {
+			super(null);
+		}
 
 		@Override
 		public OutputResolver getOutputResolver(String name) throws ExpError {
@@ -979,5 +984,29 @@ public class TestExpParser {
 		res = ExpEvaluator.evaluateExpression(assign, 0.0d);
 		assertTrue(res.value == 42.0);
 		assertTrue(res.type == ExpResType.NUMBER);
+	}
+
+	@Test
+	public void testDynamicExpression() throws ExpError {
+
+		ArrayList<String> vars = new ArrayList<>();
+		vars.add("foo");
+		vars.add("bar");
+		PC dynPC = new PC(vars);
+
+		ArrayList<ExpResult> vals = new ArrayList<>();
+		vals.add(ExpResult.makeNumResult(21, null));
+		vals.add(ExpResult.makeStringResult("baz"));
+		EC dynEC = new EC(vals);
+
+		ExpParser.Expression exp = ExpParser.parseExpression(dynPC, "foo*2");
+		ExpResult res = exp.evaluate(dynEC);
+		assertTrue(res.type == ExpResType.NUMBER);
+		assertTrue(res.value == 42.0);
+
+		exp = ExpParser.parseExpression(dynPC, "bar");
+		res = exp.evaluate(dynEC);
+		assertTrue(res.type == ExpResType.STRING);
+		assertTrue(res.stringVal.equals("baz"));
 	}
 }

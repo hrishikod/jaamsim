@@ -71,9 +71,17 @@ public class ExpParser {
 	}
 
 	public static abstract class ParseContext {
-		public ParseContext(HashMap<String, ExpResult> constVals) {
+		public ParseContext(HashMap<String, ExpResult> constVals, ArrayList<String> dynVars) {
 			ParseClosure initClosure = new ParseClosure();
-			initClosure.parseConstants = constVals;
+			if (constVals != null) {
+				initClosure.parseConstants = constVals;
+			}
+			if (dynVars != null) {
+				initClosure.boundVars = dynVars;
+				numDynamicVars = dynVars.size();
+			} else {
+				numDynamicVars = 0;
+			}
 			closureStack.add(initClosure);
 		}
 		public abstract UnitData getUnitByName(String name);
@@ -89,6 +97,7 @@ public class ExpParser {
 		public abstract Assigner getConstAssigner(ExpResult constEnt, String attribName) throws ExpError;
 
 		public ArrayList<ParseClosure> closureStack = new ArrayList<>();
+		public final int numDynamicVars;
 
 		public void pushClosure(ParseClosure close) {
 			closureStack.add(close);
@@ -164,8 +173,12 @@ public class ExpParser {
 	public static class EvalContext {
 		private final ArrayList<ArrayList<ExpResult> > closureStack = new ArrayList<>();
 
-		public EvalContext() {
-			closureStack.add(new ArrayList<ExpResult>());
+		public EvalContext(ArrayList<ExpResult> dynamicVals) {
+			if (dynamicVals != null) {
+				closureStack.add(dynamicVals);
+			} else {
+				closureStack.add(new ArrayList<ExpResult>());
+			}
 		}
 
 		public void pushClosure(ArrayList<ExpResult> closure) {
@@ -191,12 +204,14 @@ public class ExpParser {
 		public final String source;
 
 		public ExpValResult validationResult;
+		public final int numDynamicVars;
 
 		protected final ArrayList<Thread> executingThreads = new ArrayList<>();
 
 		private ExpNode rootNode;
-		public Expression(String source) {
+		public Expression(String source, int numDynVars) {
 			this.source = source;
+			this.numDynamicVars = numDynVars;
 		}
 		public ExpResult evaluate(EvalContext ec) throws ExpError {
 			synchronized(executingThreads) {
@@ -206,6 +221,14 @@ public class ExpParser {
 
 				executingThreads.add(Thread.currentThread());
 			}
+
+			assert(ec.closureStack.size() == 1);
+
+			int providedVals = ec.closureStack.get(0).size();
+			if (providedVals != numDynamicVars) {
+				throw new ExpError(null, 0, "Dynamic expression evaluation with incorrect number of values. Expected: %d, got: %d", numDynamicVars, providedVals);
+			}
+
 			ExpResult res = null;
 			try {
 				res = rootNode.evaluate(ec);
@@ -236,8 +259,8 @@ public class ExpParser {
 		public ExpNode valueExp;
 		public Assigner assigner;
 		int attribPos;
-		public Assignment(String source) {
-			super(source);
+		public Assignment(String source, int numDynVars) {
+			super(source, numDynVars);
 		}
 		@Override
 		public ExpResult evaluate(EvalContext ec) throws ExpError {
@@ -1354,7 +1377,7 @@ public class ExpParser {
 
 		TokenList tokens = new TokenList(ts);
 
-		Expression ret = new Expression(input);
+		Expression ret = new Expression(input, context.numDynamicVars);
 		ExpNode expNode = parseExp(context, tokens, 0, ret);
 
 		// Make sure we've parsed all the tokens
@@ -1464,7 +1487,7 @@ public class ExpParser {
 
 		TokenList tokens = new TokenList(ts);
 
-		Assignment ret = new Assignment(input);
+		Assignment ret = new Assignment(input, context.numDynamicVars);
 		ExpNode lhsNode = parseExp(context, tokens, 0, ret);
 
 		tokens.expect(ExpTokenizer.SYM_TYPE, "=", input);

@@ -17,6 +17,7 @@
  */
 package com.jaamsim.input;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -134,8 +135,8 @@ public class ExpEvaluator {
 			return ret;
 		}
 
-		public EntityParseContext(Entity ent, HashMap<String, ExpResult> constants, String source) {
-			super(constants);
+		public EntityParseContext(Entity ent, HashMap<String, ExpResult> constants, ArrayList<String> dynamicVars, String source) {
+			super(constants, dynamicVars);
 			this.model = ent.getJaamSimModel();
 			this.source = source;
 		}
@@ -366,7 +367,8 @@ public class ExpEvaluator {
 
 		private final double simTime;
 
-		public EntityEvalContext(double simTime) {
+		public EntityEvalContext(double simTime, ArrayList<ExpResult> dynamicVals) {
+			super(dynamicVals);
 			this.simTime = simTime;
 		}
 
@@ -379,14 +381,48 @@ public class ExpEvaluator {
 		constants.put("parent", ExpResult.makeEntityResult(parent));
 		constants.put("sub", ExpResult.makeEntityResult(parent));
 
-		return new EntityParseContext(thisEnt, constants, source);
+		return new EntityParseContext(thisEnt, constants, null, source);
 	}
 
 	public static ExpResult evaluateExpression(ExpParser.Expression exp, double simTime) throws ExpError
 	{
 		if (exp == null)
 			return ExpResult.makeEntityResult(null);
-		EntityEvalContext evalContext = new EntityEvalContext(simTime);
+
+		if (exp.numDynamicVars != 0) {
+			throw new ExpError(null, 0, "Calling evaluateExpression() with a dynamic expression. Use evaluateDynamicExpression() instead");
+		}
+
+		EntityEvalContext evalContext = new EntityEvalContext(simTime, null);
 		return exp.evaluate(evalContext);
 	}
+
+	public static EntityParseContext getDynamicParseContext(Entity thisEnt, String source) {
+		ArrayList<String> varNames = new ArrayList<>();
+		varNames.add("this");
+		varNames.add("parent");
+		varNames.add("sub");
+		return new EntityParseContext(thisEnt, null, varNames, source);
+	}
+
+	public static ExpResult evaluateDynamicExpression(ExpParser.Expression exp, double simTime,
+	                                                  Entity thisEnt, Entity parentEnt, Entity subEnt) throws ExpError
+	{
+		if (exp == null)
+			return ExpResult.makeEntityResult(null);
+
+		if (exp.numDynamicVars != 3) {
+			throw new ExpError(null, 0, "Calling evaluateDynamicExpression() with a static expression. Use evaluateExpression() instead");
+		}
+
+		ArrayList<ExpResult> varVals = new ArrayList<>();
+
+		varVals.add(ExpResult.makeEntityResult(thisEnt));
+		varVals.add(ExpResult.makeEntityResult(parentEnt));
+		varVals.add(ExpResult.makeEntityResult(subEnt));
+
+		EntityEvalContext evalContext = new EntityEvalContext(simTime, varVals);
+		return exp.evaluate(evalContext);
+	}
+
 }
