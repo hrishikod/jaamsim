@@ -43,6 +43,8 @@ private String _progLinkLog;
 private String _progValidateLog;
 
 public Shader(String vertString, String fragString, GL2GL3 gl) {
+
+	System.out.println("GL Framebuffer Status: " + gl.glCheckFramebufferStatus(GL2GL3.GL_FRAMEBUFFER));
 	_vsHandle = gl.glCreateShader(GL2GL3.GL_VERTEX_SHADER);
 	_fsHandle = gl.glCreateShader(GL2GL3.GL_FRAGMENT_SHADER);
 
